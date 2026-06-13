@@ -234,18 +234,29 @@ def severity_badge(severity: str) -> str:
     return f'<span class="{cls}">{severity}</span>'
 
 
+# ── Model paths (relative to repo root) ────────────────────────────────────
+MODELS_DIR = os.path.join(REPO_ROOT, "models")
+
+
 # ── Model Loading with caching ─────────────────────────────────────────────
 @st.cache_resource
 def cached_load_track_models():
+    required = ["track_scaler.pkl", "track_iso_forest.pkl", "track_xgb_classifier.pkl", "track_label_encoder.pkl"]
+    missing = [f for f in required if not os.path.exists(os.path.join(MODELS_DIR, f))]
+    if missing:
+        return None
     try:
-        return load_models()
+        return load_models(MODELS_DIR)
     except Exception as e:
         return None
 
 @st.cache_resource
 def cached_load_arc_model():
+    model_path = os.path.join(MODELS_DIR, "arc_cnn.pt")
+    if not os.path.exists(model_path):
+        return None
     try:
-        return load_arc_model()
+        return load_arc_model(model_path)
     except Exception as e:
         return None
 
@@ -290,7 +301,7 @@ if page == "🔧 Track Health":
 
     models = cached_load_track_models()
     if models is None:
-        st.error("⚠️ Track models not found! Please run `python track_module/train_track.py` first.")
+        st.warning("Models not found. Run `python data_gen/generate_vibration.py` then `python track_module/train_track.py` first.")
         st.stop()
 
     scaler, iso_forest, clf, le = models
@@ -367,7 +378,7 @@ elif page == "⚡ Arc Intelligence":
 
     arc_models = cached_load_arc_model()
     if arc_models is None:
-        st.error("⚠️ Arc CNN model not found! Please run `python arc_module/train_arc.py` first.")
+        st.warning("Models not found. Run `python data_gen/generate_arc.py` then `python arc_module/train_arc.py` first.")
         st.stop()
 
     model, le = arc_models
