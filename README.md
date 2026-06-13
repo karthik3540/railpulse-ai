@@ -37,7 +37,7 @@ RailPulse AI is a **real-time defect detection and risk assessment platform** fo
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/railpulse-ai.git
+git clone https://github.com/KARTHIK3540/railpulse-ai.git
 cd railpulse-ai
 
 # 2. Install dependencies
