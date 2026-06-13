@@ -1,8 +1,4 @@
-# Models (generated, too large for git)
-models/arc_cnn.pt
-models/*.pkl
-
-# Generated data
+# Generated data (too large)
 data/
 
 # Python cache
