@@ -23,5 +23,6 @@ Thumbs.db
 # Streamlit secrets
 .streamlit/secrets.toml
 
-# Verification script
+# Test/verification scripts
 verify_all.py
+test_network.py
