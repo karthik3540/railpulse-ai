@@ -8,7 +8,7 @@
 
 **Built for the FAR AWAY Hackathon 2026** — Because the future of railways isn't about going faster. It's about knowing what's breaking before it breaks.
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://railpulse-ai.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://railpulse-ai-hwzfjsqvkcyqbyhsidgymy.streamlit.app/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -51,7 +51,7 @@ cd arc_module && python train_arc.py && cd ..
 streamlit run dashboard/app.py
 ```
 
-🌐 **Live Demo**: [railpulse-ai.streamlit.app](https://railpulse-ai.streamlit.app)
+🌐 **Live Demo**: [railpulse-ai-hwzfjsqvkcyqbyhsidgymy.streamlit.app](https://railpulse-ai-hwzfjsqvkcyqbyhsidgymy.streamlit.app/)
 
 ---
 
