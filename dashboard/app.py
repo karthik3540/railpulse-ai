@@ -142,33 +142,69 @@ st.markdown("""
 
     /* ── Buttons ──────────────────────────────────── */
     .stButton > button {
-        background: linear-gradient(135deg, #64FFDA 0%, #536DFE 100%);
+        background: linear-gradient(135deg, #64FFDA 0%, #00E5A0 100%) !important;
         color: #0A1628 !important;
-        border: none;
+        border: 2px solid #64FFDA !important;
         border-radius: 12px;
-        font-weight: 700;
-        padding: 10px 28px;
-        font-size: 0.9rem;
+        font-weight: 800 !important;
+        padding: 14px 32px !important;
+        font-size: 1rem !important;
         letter-spacing: 0.5px;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 15px rgba(100,255,218,0.2);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(100,255,218,0.35);
+        min-height: 50px;
     }
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(100,255,218,0.4);
+        box-shadow: 0 8px 30px rgba(100,255,218,0.55);
+        background: linear-gradient(135deg, #00E5A0 0%, #64FFDA 100%) !important;
+    }
+    .stButton > button:active {
+        transform: translateY(0);
     }
 
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #536DFE 0%, #FF6B9D 100%);
-        color: #fff !important;
-        border: none;
+        background: linear-gradient(135deg, #536DFE 0%, #7C4DFF 100%) !important;
+        color: #FFFFFF !important;
+        border: 2px solid #536DFE !important;
         border-radius: 12px;
-        font-weight: 700;
-        box-shadow: 0 4px 15px rgba(83,109,254,0.3);
+        font-weight: 800 !important;
+        padding: 14px 32px !important;
+        font-size: 1rem !important;
+        box-shadow: 0 4px 20px rgba(83,109,254,0.4);
+        min-height: 50px;
     }
     .stDownloadButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(83,109,254,0.5);
+        box-shadow: 0 8px 30px rgba(83,109,254,0.6);
+        background: linear-gradient(135deg, #7C4DFF 0%, #536DFE 100%) !important;
+    }
+
+    /* ── Select boxes ─────────────────────────────── */
+    div[data-baseweb="select"] {
+        background: rgba(17, 34, 64, 0.6) !important;
+        border: 1px solid rgba(100,255,218,0.3) !important;
+        border-radius: 10px !important;
+    }
+    div[data-baseweb="select"] > div {
+        color: #CCD6F6 !important;
+    }
+
+    /* ── File uploader button ─────────────────────── */
+    div[data-testid="stFileUploader"] button {
+        background: rgba(83,109,254,0.3) !important;
+        color: #CCD6F6 !important;
+        border: 1px solid rgba(83,109,254,0.5) !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stFileUploader"] button:hover {
+        background: rgba(83,109,254,0.5) !important;
+        border-color: #536DFE !important;
+    }
+
+    /* ── Slider ───────────────────────────────────── */
+    div[data-testid="stSlider"] > div > div {
+        color: #CCD6F6 !important;
     }
 
     /* ── Divider ──────────────────────────────────── */
