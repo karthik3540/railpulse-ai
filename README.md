@@ -82,6 +82,16 @@ data_gen/ ──→ track_module/ ──→ fusion_engine/ ──→ dashboard/
 
 ---
 
+## 🌐 Distributed Sensing Architecture
+
+RailPulse AI is designed as a **Train-as-a-Sensor (TaaS)** distributed network. Each train running the RailPulse pipeline becomes an independent sensing node — not tied to a fixed route. As multiple trains pass the same track segment, their independent defect detections are cross-validated by a consensus engine, turning isolated readings into network-wide confidence scores.
+
+- **Zero Infrastructure**: Accuracy and coverage scale automatically with fleet size — no fixed sensors needed at every monitored point
+- **Consensus Validation**: Defects reported by 2+ trains are marked CONFIRMED with boosted confidence; single-train reports remain UNCONFIRMED for review
+- **False Positive Reduction**: Cross-validation across independent sensors eliminates noise, ensuring maintenance crews act on real defects
+
+---
+
 ## 📂 Project Structure
 
 ```

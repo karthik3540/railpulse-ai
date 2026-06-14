@@ -24,6 +24,7 @@ from streamlit_folium import st_folium
 from track_module.predict import load_models, predict_track
 from arc_module.predict_arc import load_arc_model, predict_arc
 from fusion_engine.fusion import generate_demo_events, compute_lhs, DefectEvent
+from fusion_engine.network import generate_fleet_events, compute_consensus
 from reports.generate_report import generate_report
 
 np.random.seed(42)
@@ -276,7 +277,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        ["🔧 Track Health", "⚡ Arc Intelligence", "🗺️ Route Map", "📄 Report"],
+        ["🔧 Track Health", "⚡ Arc Intelligence", "🗺️ Route Map", "📄 Report", "🚆 Train Network"],
         index=0,
     )
 
@@ -647,3 +648,136 @@ elif page == "📄 Report":
             use_container_width=True,
         )
         st.success("✅ Report generated successfully!")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# TAB 5: TRAIN NETWORK
+# ══════════════════════════════════════════════════════════════════════════
+elif page == "🚆 Train Network":
+    st.markdown("# 🚆 Distributed Train Network")
+    st.markdown(
+        "Every train is an independent sensor node. The **consensus engine** "
+        "cross-validates detections across the fleet, confirming real defects "
+        "and filtering false positives."
+    )
+    st.markdown("---")
+
+    # Generate fleet events and consensus
+    fleet = generate_fleet_events(n_trains=4)
+    consensus = compute_consensus(fleet)
+
+    confirmed = [e for e in consensus if e.status == "CONFIRMED"]
+    unconfirmed = [e for e in consensus if e.status == "UNCONFIRMED"]
+
+    # ── Metric cards ───────────────────────────────────────────────────
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Trains", len(fleet))
+    with col2:
+        st.metric("Confirmed Defects", len(confirmed))
+    with col3:
+        st.metric("Unconfirmed Defects", len(unconfirmed))
+
+    st.markdown("---")
+
+    # ── Folium Map ─────────────────────────────────────────────────────
+    center_lat = (28.6 + 27.2) / 2
+    center_lon = (77.2 + 78.0) / 2
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=8,
+        tiles="CartoDB dark_matter",
+    )
+
+    severity_colors = {
+        "CRITICAL": "#FF5370",
+        "WARNING": "#FFCB6B",
+        "OK": "#C3E88D",
+    }
+
+    # Draw corridor line
+    corridor_coords = [
+        [28.6, 77.2], [28.3, 77.3], [27.9, 77.5],
+        [27.5, 77.7], [27.2, 78.0],
+    ]
+    folium.PolyLine(
+        corridor_coords, color="#64FFDA",
+        weight=3, opacity=0.6, dash_array="10",
+    ).add_to(m)
+
+    # Plot consensus events
+    for event in consensus:
+        color = severity_colors.get(event.severity, "#C3E88D")
+        is_confirmed = event.status == "CONFIRMED"
+        fill_opacity = 0.9 if is_confirmed else 0.3
+        weight = 2 if is_confirmed else 1
+
+        status_icon = "CONFIRMED" if is_confirmed else "UNCONFIRMED"
+        popup_html = f"""
+        <div style="font-family: Inter, sans-serif; min-width: 220px;">
+            <h4 style="color: #1a1a2e; margin-bottom: 5px;">
+                {'🟢' if is_confirmed else '🔘'} {status_icon}
+            </h4>
+            <b>Defect:</b> {event.defect_class}<br>
+            <b>Type:</b> {event.asset_type.upper()}<br>
+            <b>Risk:</b> {event.risk_index:.1f}<br>
+            <b>Confidence:</b> {event.confidence:.1f}%<br>
+            <b>Severity:</b> <span style="color:{color}; font-weight:bold;">{event.severity}</span><br>
+            <b>Trains:</b> {event.confirming_trains}
+        </div>
+        """
+
+        folium.CircleMarker(
+            location=[event.lat, event.lon],
+            radius=max(7, event.risk_index / 7),
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=fill_opacity,
+            weight=weight,
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"{event.status}: {event.defect_class} (Risk: {event.risk_index:.0f}, Trains: {event.confirming_trains})",
+        ).add_to(m)
+
+    # Legend
+    legend_html = """
+    <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
+                background: rgba(10,22,40,0.9); padding: 15px 20px; border-radius: 10px;
+                border: 1px solid #1d3461; font-family: Inter, sans-serif;">
+        <h4 style="color: #CCD6F6; margin: 0 0 10px 0; font-size: 13px;">Train Network Legend</h4>
+        <p style="margin: 4px 0; color: #CCD6F6; font-size: 11px;">
+            <span style="color:#FF5370;">&#9679;</span> CRITICAL &nbsp;
+            <span style="color:#FFCB6B;">&#9679;</span> WARNING &nbsp;
+            <span style="color:#C3E88D;">&#9679;</span> OK
+        </p>
+        <p style="margin: 4px 0; color: #8892B0; font-size: 10px;">
+            Solid = CONFIRMED &nbsp; Faded = UNCONFIRMED
+        </p>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
+
+    st_folium(m, width=None, height=600)
+
+    # ── Consensus Table ────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Consensus Events")
+
+    table_data = []
+    for e in consensus:
+        table_data.append({
+            "Location": f"({e.lat:.3f}, {e.lon:.3f})",
+            "Defect": e.defect_class,
+            "Type": e.asset_type.upper(),
+            "Status": e.status,
+            "Confirming Trains": e.confirming_trains,
+            "Risk": e.risk_index,
+            "Confidence (%)": e.confidence,
+            "Severity": e.severity,
+        })
+
+    st.dataframe(
+        pd.DataFrame(table_data),
+        use_container_width=True,
+        hide_index=True,
+    )
