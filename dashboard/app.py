@@ -1,6 +1,6 @@
 """
-RailPulse AI — Streamlit Dashboard
-Main application with 4 tabs: Track Health | Arc Intelligence | Route Map | Report
+RailPulse AI — Streamlit Dashboard (Premium UI)
+Main application with 5 tabs: Track Health | Arc Intelligence | Route Map | Report | Train Network
 """
 
 import sys
@@ -18,8 +18,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.signal import stft
+import plotly.graph_objects as go
+import plotly.express as px
 import folium
 from streamlit_folium import st_folium
+import io
 
 from track_module.predict import load_models, predict_track
 from arc_module.predict_arc import load_arc_model, predict_arc
@@ -29,6 +32,10 @@ from reports.generate_report import generate_report
 
 np.random.seed(42)
 
+# ── Model paths (relative to repo root) ────────────────────────────────────
+MODELS_DIR = os.path.join(REPO_ROOT, "models")
+DEMO_DIR = os.path.join(REPO_ROOT, "demo_data")
+
 # ── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="RailPulse AI — Railway Predictive Maintenance",
@@ -37,206 +44,325 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Dark Theme CSS ─────────────────────────────────────────────────────────
+# ── Premium Dark Theme CSS ─────────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
 
-    /* Main app background */
+    /* ── Base ─────────────────────────────────────── */
     .stApp {
-        background-color: #0A1628;
+        background: #060d1f;
         font-family: 'Inter', sans-serif;
     }
 
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #112240;
-        border-right: 1px solid #1d3461;
-    }
-    section[data-testid="stSidebar"] .stRadio label {
-        color: #CCD6F6 !important;
-        font-weight: 500;
+    /* ── Scrollbar ────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #060d1f; }
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #64FFDA, #536DFE);
+        border-radius: 3px;
     }
 
-    /* Headers */
+    /* ── Sidebar ──────────────────────────────────── */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a1628 0%, #0d1f3c 50%, #0a1628 100%);
+        border-right: 1px solid rgba(100,255,218,0.1);
+    }
+    section[data-testid="stSidebar"] .stRadio label {
+        color: #8892B0 !important;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+        padding: 4px 0;
+    }
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        color: #64FFDA !important;
+    }
+
+    /* ── Headers ──────────────────────────────────── */
     h1, h2, h3 {
         color: #CCD6F6 !important;
         font-family: 'Inter', sans-serif !important;
     }
     h1 {
-        background: linear-gradient(135deg, #64FFDA, #82B1FF);
+        background: linear-gradient(135deg, #64FFDA 0%, #536DFE 50%, #FF6B9D 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 700 !important;
+        font-weight: 800 !important;
+        font-size: 2.2rem !important;
+        letter-spacing: -0.5px;
     }
 
-    /* Text */
-    p, span, label, .stMarkdown {
-        color: #8892B0 !important;
-    }
+    /* ── Text ─────────────────────────────────────── */
+    p, span, label, .stMarkdown { color: #8892B0 !important; }
 
-    /* Metric cards */
+    /* ── Glassmorphism Metric Cards ───────────────── */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #112240, #1d3461);
-        border: 1px solid #1d3461;
-        border-radius: 12px;
-        padding: 16px 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        background: rgba(17, 34, 64, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(100,255,218,0.15);
+        border-radius: 16px;
+        padding: 20px 24px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(100,255,218,0.1);
+        transform: translateY(-4px);
+        border-color: rgba(100,255,218,0.4);
+        box-shadow: 0 12px 40px rgba(100,255,218,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
     }
     div[data-testid="stMetric"] label {
-        color: #8892B0 !important;
-        font-size: 0.85rem !important;
+        color: #64FFDA !important;
+        font-size: 0.75rem !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
+        font-weight: 600;
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #CCD6F6 !important;
+        color: #E6F1FF !important;
         font-weight: 700 !important;
         font-size: 1.8rem !important;
     }
 
-    /* File uploader */
+    /* ── File Uploader ────────────────────────────── */
     div[data-testid="stFileUploader"] {
-        background: #112240;
-        border: 2px dashed #1d3461;
-        border-radius: 12px;
+        background: rgba(17, 34, 64, 0.4);
+        backdrop-filter: blur(10px);
+        border: 2px dashed rgba(100,255,218,0.25);
+        border-radius: 16px;
         padding: 10px;
+        transition: all 0.3s ease;
     }
     div[data-testid="stFileUploader"]:hover {
         border-color: #64FFDA;
+        background: rgba(17, 34, 64, 0.6);
     }
 
-    /* Buttons */
+    /* ── Buttons ──────────────────────────────────── */
     .stButton > button {
-        background: linear-gradient(135deg, #64FFDA, #82B1FF);
+        background: linear-gradient(135deg, #64FFDA 0%, #536DFE 100%);
         color: #0A1628 !important;
         border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 8px 24px;
-        transition: all 0.3s ease;
+        border-radius: 12px;
+        font-weight: 700;
+        padding: 10px 28px;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(100,255,218,0.2);
     }
     .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 15px rgba(100,255,218,0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(100,255,218,0.4);
     }
 
-    /* Download button */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #64FFDA, #82B1FF);
-        color: #0A1628 !important;
+        background: linear-gradient(135deg, #536DFE 0%, #FF6B9D 100%);
+        color: #fff !important;
         border: none;
-        border-radius: 8px;
-        font-weight: 600;
+        border-radius: 12px;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(83,109,254,0.3);
+    }
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(83,109,254,0.5);
     }
 
-    /* Divider */
+    /* ── Divider ──────────────────────────────────── */
     hr {
-        border-color: #1d3461 !important;
+        border-color: rgba(100,255,218,0.1) !important;
+        margin: 1.5rem 0;
     }
 
-    /* Radio buttons */
-    .stRadio > div {
-        gap: 8px;
-    }
-
-    /* Severity badges */
+    /* ── Severity Badges ─────────────────────────── */
     .severity-critical {
         background: linear-gradient(135deg, #FF5370, #FF8A80);
         color: #fff;
-        padding: 4px 16px;
-        border-radius: 20px;
+        padding: 6px 20px;
+        border-radius: 24px;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         display: inline-block;
+        box-shadow: 0 4px 15px rgba(255,83,112,0.4);
         animation: pulse-critical 2s infinite;
     }
     .severity-warning {
         background: linear-gradient(135deg, #FFCB6B, #FFE082);
         color: #1a1a2e;
-        padding: 4px 16px;
-        border-radius: 20px;
+        padding: 6px 20px;
+        border-radius: 24px;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         display: inline-block;
+        box-shadow: 0 4px 15px rgba(255,203,107,0.3);
     }
     .severity-ok {
         background: linear-gradient(135deg, #C3E88D, #AED581);
         color: #1a1a2e;
-        padding: 4px 16px;
-        border-radius: 20px;
+        padding: 6px 20px;
+        border-radius: 24px;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         display: inline-block;
+        box-shadow: 0 4px 15px rgba(195,232,141,0.3);
     }
 
     @keyframes pulse-critical {
         0%, 100% { box-shadow: 0 0 5px rgba(255,83,112,0.5); }
-        50% { box-shadow: 0 0 20px rgba(255,83,112,0.8); }
+        50% { box-shadow: 0 0 25px rgba(255,83,112,0.8); }
     }
 
-    /* Hero section */
-    .hero-container {
-        text-align: center;
-        padding: 20px 0;
+    /* ── Result Card ─────────────────────────────── */
+    .result-card {
+        background: rgba(17, 34, 64, 0.5);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(100,255,218,0.15);
+        border-radius: 20px;
+        padding: 28px;
+        margin: 16px 0;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    .result-card-critical {
+        border-left: 4px solid #FF5370;
+    }
+    .result-card-warning {
+        border-left: 4px solid #FFCB6B;
+    }
+    .result-card-ok {
+        border-left: 4px solid #C3E88D;
     }
 
-    /* Stat card */
-    .stat-card {
-        background: linear-gradient(145deg, #112240, #1d3461);
-        border: 1px solid #1d3461;
-        border-radius: 16px;
-        padding: 24px;
+    /* ── Info Box ─────────────────────────────────── */
+    .info-box {
+        background: rgba(83,109,254,0.1);
+        border: 1px solid rgba(83,109,254,0.2);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 12px 0;
+    }
+    .info-box p { color: #CCD6F6 !important; margin: 0; font-size: 0.9rem; }
+
+    /* ── Sample Button Area ───────────────────────── */
+    .sample-area {
+        background: rgba(100,255,218,0.05);
+        border: 1px dashed rgba(100,255,218,0.2);
+        border-radius: 12px;
+        padding: 16px;
         text-align: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        margin: 8px 0;
+    }
+
+    /* ── Status badges ────────────────────────────── */
+    .status-confirmed {
+        background: linear-gradient(135deg, #64FFDA, #00E5A0);
+        color: #0A1628;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+    .status-unconfirmed {
+        background: rgba(255,255,255,0.1);
+        color: #8892B0;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* ── Plotly charts dark ────────────────────────── */
+    .js-plotly-plot .plotly .modebar { display: none !important; }
+
+    /* ── Data table ───────────────────────────────── */
+    div[data-testid="stDataFrame"] {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    /* ── Tab-hero gradient line ────────────────────── */
+    .gradient-line {
+        height: 3px;
+        background: linear-gradient(90deg, #64FFDA, #536DFE, #FF6B9D, #536DFE, #64FFDA);
+        background-size: 200% 100%;
+        animation: shimmer 3s ease infinite;
+        border-radius: 2px;
+        margin: 8px 0 24px 0;
+    }
+    @keyframes shimmer {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Helper: Dark matplotlib figures ────────────────────────────────────────
-def dark_fig(figsize=(10, 4)):
-    """Create a matplotlib figure with dark theme."""
-    fig, ax = plt.subplots(figsize=figsize)
-    fig.patch.set_facecolor("#112240")
-    ax.set_facecolor("#0A1628")
-    ax.tick_params(colors="white")
-    ax.xaxis.label.set_color("white")
-    ax.yaxis.label.set_color("white")
-    ax.title.set_color("#CCD6F6")
-    for spine in ax.spines.values():
-        spine.set_color("#1d3461")
-    return fig, ax
+# ── Plotly Theme ───────────────────────────────────────────────────────────
+PLOTLY_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(10,22,40,0.8)",
+    font=dict(family="Inter", color="#8892B0"),
+    title_font=dict(color="#CCD6F6", size=16),
+    xaxis=dict(gridcolor="rgba(100,255,218,0.07)", zerolinecolor="rgba(100,255,218,0.1)"),
+    yaxis=dict(gridcolor="rgba(100,255,218,0.07)", zerolinecolor="rgba(100,255,218,0.1)"),
+    margin=dict(l=40, r=20, t=50, b=40),
+)
 
 
-def dark_fig_dual(figsize=(14, 4)):
-    """Create a dual-subplot matplotlib figure with dark theme."""
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    fig.patch.set_facecolor("#112240")
-    for ax in (ax1, ax2):
-        ax.set_facecolor("#0A1628")
-        ax.tick_params(colors="white")
-        ax.xaxis.label.set_color("white")
-        ax.yaxis.label.set_color("white")
-        ax.title.set_color("#CCD6F6")
-        for spine in ax.spines.values():
-            spine.set_color("#1d3461")
-    return fig, ax1, ax2
-
-
+# ── Helper Functions ───────────────────────────────────────────────────────
 def severity_badge(severity: str) -> str:
-    """Return HTML for a colored severity badge."""
     cls = f"severity-{severity.lower()}"
     return f'<span class="{cls}">{severity}</span>'
 
 
-# ── Model paths (relative to repo root) ────────────────────────────────────
-MODELS_DIR = os.path.join(REPO_ROOT, "models")
+def make_gauge(value, title, max_val=100, color_ranges=None):
+    """Create a Plotly gauge chart."""
+    if color_ranges is None:
+        color_ranges = [
+            [0, 30, "#C3E88D"], [30, 60, "#FFCB6B"],
+            [60, 80, "#FF8A80"], [80, 100, "#FF5370"],
+        ]
+    steps = [dict(range=[r[0], r[1]], color=r[2]) for r in color_ranges]
+    bar_color = "#64FFDA"
+    for r in color_ranges:
+        if r[0] <= value <= r[1]:
+            bar_color = r[2]
+            break
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        title=dict(text=title, font=dict(size=14, color="#CCD6F6")),
+        number=dict(font=dict(size=32, color="#E6F1FF")),
+        gauge=dict(
+            axis=dict(range=[0, max_val], tickcolor="#8892B0", tickfont=dict(color="#8892B0")),
+            bar=dict(color=bar_color, thickness=0.3),
+            bgcolor="rgba(10,22,40,0.8)",
+            bordercolor="rgba(100,255,218,0.1)",
+            steps=steps,
+            threshold=dict(line=dict(color="#64FFDA", width=2), value=value, thickness=0.8),
+        ),
+    ))
+    fig.update_layout(
+        height=220,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter"),
+        margin=dict(l=30, r=30, t=50, b=10),
+    )
+    return fig
+
+
+def load_sample_csv(filename):
+    """Load a sample CSV from demo_data/ folder."""
+    path = os.path.join(DEMO_DIR, filename)
+    if os.path.exists(path):
+        return pd.read_csv(path)
+    return None
 
 
 # ── Model Loading with caching ─────────────────────────────────────────────
@@ -248,7 +374,7 @@ def cached_load_track_models():
         return None
     try:
         return load_models(MODELS_DIR)
-    except Exception as e:
+    except Exception:
         return None
 
 @st.cache_resource
@@ -258,17 +384,23 @@ def cached_load_arc_model():
         return None
     try:
         return load_arc_model(model_path)
-    except Exception as e:
+    except Exception:
         return None
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="text-align:center; padding: 20px 0;">
-        <h1 style="font-size: 1.8rem; margin-bottom: 4px;">🚂 RailPulse AI</h1>
-        <p style="color: #64FFDA !important; font-size: 0.85rem; margin-top: 0;">
-            Predictive Maintenance System
+    <div style="text-align:center; padding: 24px 0 16px 0;">
+        <div style="font-size: 2.5rem; margin-bottom: 4px;">🚂</div>
+        <h1 style="font-size: 1.5rem; margin: 0; letter-spacing: -0.5px;
+                   background: linear-gradient(135deg, #64FFDA, #536DFE);
+                   -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            RailPulse AI
+        </h1>
+        <p style="color: #536DFE !important; font-size: 0.75rem; margin-top: 4px;
+                  text-transform: uppercase; letter-spacing: 2px;">
+            Predictive Maintenance
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -284,9 +416,9 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("""
     <div style="text-align:center; padding: 10px 0;">
-        <p style="color: #555 !important; font-size: 0.75rem;">
-            FAR AWAY Hackathon 2026<br>
-            Delhi-Agra Railway Corridor
+        <p style="color: #536DFE !important; font-size: 0.7rem; letter-spacing: 1px;">
+            FAR AWAY HACKATHON 2026<br>
+            <span style="color: #64FFDA !important;">Delhi — Agra Corridor</span>
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -297,8 +429,8 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════
 if page == "🔧 Track Health":
     st.markdown("# 🔧 Track Health Analysis")
+    st.markdown('<div class="gradient-line"></div>', unsafe_allow_html=True)
     st.markdown("Upload a vibration CSV file to analyze track defects using **XGBoost + Isolation Forest**.")
-    st.markdown("---")
 
     models = cached_load_track_models()
     if models is None:
@@ -307,125 +439,108 @@ if page == "🔧 Track Health":
 
     scaler, iso_forest, clf, le = models
 
-    uploaded = st.file_uploader("Upload Vibration CSV", type=["csv"], key="track_upload")
+    # ── Sample data + Upload ──────────────────────────────────────────
+    st.markdown("---")
+    col_up, col_sample = st.columns([3, 1])
 
+    with col_up:
+        uploaded = st.file_uploader("Upload Vibration CSV", type=["csv"], key="track_upload")
+
+    with col_sample:
+        st.markdown("##### 📁 Sample Files")
+        sample_files = {
+            "Mixed (10 samples)": "vibration_mixed.csv",
+            "Crack Defect": "vibration_crack_defect.csv",
+            "Ball Fault": "vibration_ball_fault.csv",
+            "Normal": "vibration_normal.csv",
+        }
+        selected_sample = st.selectbox("Load sample data:", list(sample_files.keys()), key="track_sample")
+        if st.button("Load Sample", key="load_track_sample", use_container_width=True):
+            sample_df = load_sample_csv(sample_files[selected_sample])
+            if sample_df is not None:
+                st.session_state["track_df"] = sample_df
+                st.session_state["track_source"] = selected_sample
+
+    # Determine active DataFrame
+    df = None
+    source_name = ""
     if uploaded is not None:
         df = pd.read_csv(uploaded)
-        st.success(f"✅ Loaded {len(df)} samples from `{uploaded.name}`")
+        source_name = uploaded.name
+    elif "track_df" in st.session_state:
+        df = st.session_state["track_df"]
+        source_name = st.session_state.get("track_source", "sample")
 
-        # Use first sample for analysis
+    if df is not None:
+        st.success(f"Loaded **{len(df)} samples** from `{source_name}`")
+
         signal_cols = [c for c in df.columns if c.startswith("s_")]
         if not signal_cols:
-            # Try using all numeric columns except 'label'
             signal_cols = [c for c in df.columns if c != "label"]
 
         sample_idx = st.slider("Select sample index", 0, len(df) - 1, 0)
         window = df[signal_cols].iloc[sample_idx].values.astype(np.float64)
 
-        # ── Plot: Raw Waveform + FFT ───────────────────────────────────
-        fig, ax1, ax2 = dark_fig_dual(figsize=(14, 4))
+        # ── Plotly: Waveform + FFT ─────────────────────────────────
+        col_wave, col_fft = st.columns(2)
 
-        # Raw waveform
-        t_axis = np.arange(len(window)) / 1000  # seconds
-        ax1.plot(t_axis, window, color="#64FFDA", linewidth=0.8, alpha=0.9)
-        ax1.fill_between(t_axis, window, alpha=0.15, color="#64FFDA")
-        ax1.set_xlabel("Time (s)")
-        ax1.set_ylabel("Amplitude")
-        ax1.set_title("Raw Vibration Waveform")
+        with col_wave:
+            t_axis = np.arange(len(window)) / 1000
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=t_axis, y=window, mode="lines",
+                line=dict(color="#64FFDA", width=1),
+                fill="tozeroy", fillcolor="rgba(100,255,218,0.08)",
+                name="Amplitude",
+            ))
+            fig.update_layout(
+                title="Raw Vibration Waveform",
+                xaxis_title="Time (s)", yaxis_title="Amplitude",
+                **PLOTLY_LAYOUT, height=300,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        # FFT
-        fft_vals = np.fft.rfft(window)
-        fft_mag = np.abs(fft_vals)
-        freqs = np.fft.rfftfreq(len(window), d=1.0 / 1000)
-        ax2.plot(freqs, fft_mag, color="#82B1FF", linewidth=0.8)
-        ax2.fill_between(freqs, fft_mag, alpha=0.15, color="#82B1FF")
-        ax2.set_xlabel("Frequency (Hz)")
-        ax2.set_ylabel("Magnitude")
-        ax2.set_title("FFT Spectrum")
-        ax2.set_xlim(0, 500)
+        with col_fft:
+            fft_vals = np.fft.rfft(window)
+            fft_mag = np.abs(fft_vals)
+            freqs = np.fft.rfftfreq(len(window), d=1.0 / 1000)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=freqs, y=fft_mag, mode="lines",
+                line=dict(color="#536DFE", width=1),
+                fill="tozeroy", fillcolor="rgba(83,109,254,0.08)",
+                name="Magnitude",
+            ))
+            fig.update_layout(
+                title="FFT Spectrum",
+                xaxis_title="Frequency (Hz)", yaxis_title="Magnitude",
+                xaxis=dict(range=[0, 500], **PLOTLY_LAYOUT["xaxis"]),
+                **{k: v for k, v in PLOTLY_LAYOUT.items() if k != "xaxis"},
+                height=300,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-
-        # ── Predict ────────────────────────────────────────────────────
+        # ── Predict ────────────────────────────────────────────────
         result = predict_track(window, scaler, iso_forest, clf, le)
 
         st.markdown("---")
-        st.markdown("### 📊 Detection Results")
+        sev = result["severity"].lower()
+        st.markdown(f"""
+        <div class="result-card result-card-{sev}">
+            <h3 style="margin-top:0;">Detection Results {severity_badge(result['severity'])}</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Metric cards
-        col1, col2, col3, col4 = st.columns(4)
+        # Gauge charts
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Defect Class", result["defect_class"].replace("_", " ").title())
+            st.plotly_chart(make_gauge(result["confidence"], "Confidence %"), use_container_width=True)
         with col2:
-            st.metric("Confidence", f"{result['confidence']:.1f}%")
+            st.plotly_chart(make_gauge(result["risk_index"], "Risk Index"), use_container_width=True)
         with col3:
-            st.metric("Anomaly Score", f"{result['anomaly_score']:.1f}")
-        with col4:
-            st.metric("Risk Index", f"{result['risk_index']:.1f}")
+            st.plotly_chart(make_gauge(abs(result["anomaly_score"]) * 10, "Anomaly Score", max_val=100), use_container_width=True)
 
-        # Severity badge
-        st.markdown(f"#### Severity: {severity_badge(result['severity'])}", unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# TAB 2: ARC INTELLIGENCE
-# ══════════════════════════════════════════════════════════════════════════
-elif page == "⚡ Arc Intelligence":
-    st.markdown("# ⚡ Arc Intelligence")
-    st.markdown("Upload an arc waveform CSV to analyze OHE defects using **1D-CNN deep learning**.")
-    st.markdown("---")
-
-    arc_models = cached_load_arc_model()
-    if arc_models is None:
-        st.warning("Models not found. Run `python data_gen/generate_arc.py` then `python arc_module/train_arc.py` first.")
-        st.stop()
-
-    model, le = arc_models
-
-    uploaded = st.file_uploader("Upload Arc Waveform CSV", type=["csv"], key="arc_upload")
-
-    if uploaded is not None:
-        df = pd.read_csv(uploaded)
-        st.success(f"✅ Loaded {len(df)} samples from `{uploaded.name}`")
-
-        signal_cols = [c for c in df.columns if c.startswith("s_")]
-        if not signal_cols:
-            signal_cols = [c for c in df.columns if c != "label"]
-
-        sample_idx = st.slider("Select sample index", 0, len(df) - 1, 0)
-        waveform = df[signal_cols].iloc[sample_idx].values.astype(np.float64)
-
-        # ── Plot: Spectrogram (STFT) ───────────────────────────────────
-        fig, ax1, ax2 = dark_fig_dual(figsize=(14, 4))
-
-        # Raw waveform
-        t_axis = np.arange(len(waveform)) / 10000
-        ax1.plot(t_axis, waveform, color="#FFCB6B", linewidth=0.8, alpha=0.9)
-        ax1.fill_between(t_axis, waveform, alpha=0.15, color="#FFCB6B")
-        ax1.set_xlabel("Time (s)")
-        ax1.set_ylabel("Amplitude")
-        ax1.set_title("Raw Arc Waveform")
-
-        # Spectrogram via STFT
-        nperseg = min(64, len(waveform))
-        f_stft, t_stft, Zxx = stft(waveform, fs=10000, nperseg=nperseg, noverlap=nperseg // 2)
-        ax2.pcolormesh(t_stft, f_stft, np.abs(Zxx), shading="gouraud", cmap="inferno")
-        ax2.set_xlabel("Time (s)")
-        ax2.set_ylabel("Frequency (Hz)")
-        ax2.set_title("STFT Spectrogram")
-
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-
-        # ── Predict ────────────────────────────────────────────────────
-        result = predict_arc(waveform, model, le)
-
-        st.markdown("---")
-        st.markdown("### 📊 CNN Detection Results")
-
+        # Metrics row
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Defect Class", result["defect_class"].replace("_", " ").title())
@@ -436,27 +551,143 @@ elif page == "⚡ Arc Intelligence":
         with col4:
             st.metric("Severity", result["severity"])
 
-        # Severity badge
-        st.markdown(f"#### Severity: {severity_badge(result['severity'])}", unsafe_allow_html=True)
 
-        # Class probabilities
-        st.markdown("### 📈 Class Probabilities")
-        probs_df = pd.DataFrame(
-            list(result["all_probs"].items()),
-            columns=["Class", "Probability (%)"],
-        ).sort_values("Probability (%)", ascending=False)
+# ══════════════════════════════════════════════════════════════════════════
+# TAB 2: ARC INTELLIGENCE
+# ══════════════════════════════════════════════════════════════════════════
+elif page == "⚡ Arc Intelligence":
+    st.markdown("# ⚡ Arc Intelligence")
+    st.markdown('<div class="gradient-line"></div>', unsafe_allow_html=True)
+    st.markdown("Upload an arc waveform CSV to analyze OHE defects using **1D-CNN deep learning**.")
 
-        fig, ax = dark_fig(figsize=(8, 3))
-        bars = ax.barh(probs_df["Class"], probs_df["Probability (%)"], color="#82B1FF", edgecolor="#64FFDA", linewidth=0.5)
-        ax.set_xlabel("Probability (%)")
-        ax.set_title("Class Probabilities")
-        ax.set_xlim(0, 100)
-        for bar, val in zip(bars, probs_df["Probability (%)"]):
-            ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height() / 2,
-                    f"{val:.1f}%", va="center", color="white", fontsize=9)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+    arc_models = cached_load_arc_model()
+    if arc_models is None:
+        st.warning("Models not found. Run `python data_gen/generate_arc.py` then `python arc_module/train_arc.py` first.")
+        st.stop()
+
+    model, le = arc_models
+
+    # ── Sample data + Upload ──────────────────────────────────────────
+    st.markdown("---")
+    col_up, col_sample = st.columns([3, 1])
+
+    with col_up:
+        uploaded = st.file_uploader("Upload Arc Waveform CSV", type=["csv"], key="arc_upload")
+
+    with col_sample:
+        st.markdown("##### 📁 Sample Files")
+        sample_files = {
+            "Mixed (12 samples)": "arc_mixed.csv",
+            "Wire Wear": "arc_wire_wear.csv",
+            "Tension Anomaly": "arc_tension_anomaly.csv",
+            "Normal Contact": "arc_normal_contact.csv",
+        }
+        selected_sample = st.selectbox("Load sample data:", list(sample_files.keys()), key="arc_sample")
+        if st.button("Load Sample", key="load_arc_sample", use_container_width=True):
+            sample_df = load_sample_csv(sample_files[selected_sample])
+            if sample_df is not None:
+                st.session_state["arc_df"] = sample_df
+                st.session_state["arc_source"] = selected_sample
+
+    # Determine active DataFrame
+    df = None
+    source_name = ""
+    if uploaded is not None:
+        df = pd.read_csv(uploaded)
+        source_name = uploaded.name
+    elif "arc_df" in st.session_state:
+        df = st.session_state["arc_df"]
+        source_name = st.session_state.get("arc_source", "sample")
+
+    if df is not None:
+        st.success(f"Loaded **{len(df)} samples** from `{source_name}`")
+
+        signal_cols = [c for c in df.columns if c.startswith("s_")]
+        if not signal_cols:
+            signal_cols = [c for c in df.columns if c != "label"]
+
+        sample_idx = st.slider("Select sample index", 0, len(df) - 1, 0)
+        waveform = df[signal_cols].iloc[sample_idx].values.astype(np.float64)
+
+        # ── Plotly: Waveform + Spectrogram ─────────────────────────
+        col_wave, col_spec = st.columns(2)
+
+        with col_wave:
+            t_axis = np.arange(len(waveform)) / 10000
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=t_axis, y=waveform, mode="lines",
+                line=dict(color="#FFCB6B", width=1),
+                fill="tozeroy", fillcolor="rgba(255,203,107,0.08)",
+            ))
+            fig.update_layout(
+                title="Raw Arc Waveform",
+                xaxis_title="Time (s)", yaxis_title="Amplitude",
+                **PLOTLY_LAYOUT, height=300,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_spec:
+            nperseg = min(64, len(waveform))
+            f_stft, t_stft, Zxx = stft(waveform, fs=10000, nperseg=nperseg, noverlap=nperseg // 2)
+            fig = go.Figure(go.Heatmap(
+                z=np.abs(Zxx), x=t_stft, y=f_stft,
+                colorscale="Inferno", showscale=False,
+            ))
+            fig.update_layout(
+                title="STFT Spectrogram",
+                xaxis_title="Time (s)", yaxis_title="Frequency (Hz)",
+                **PLOTLY_LAYOUT, height=300,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # ── Predict ────────────────────────────────────────────────
+        result = predict_arc(waveform, model, le)
+
+        st.markdown("---")
+        sev = result["severity"].lower()
+        st.markdown(f"""
+        <div class="result-card result-card-{sev}">
+            <h3 style="margin-top:0;">CNN Detection Results {severity_badge(result['severity'])}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Gauge charts
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(make_gauge(result["confidence"], "Confidence %"), use_container_width=True)
+        with col2:
+            st.plotly_chart(make_gauge(result["risk_index"], "Risk Index"), use_container_width=True)
+
+        # Metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Defect Class", result["defect_class"].replace("_", " ").title())
+        with col2:
+            st.metric("Confidence", f"{result['confidence']:.1f}%")
+        with col3:
+            st.metric("Severity", result["severity"])
+
+        # ── Probability chart ──────────────────────────────────────
+        st.markdown("### Class Probabilities")
+        probs = result["all_probs"]
+        classes = list(probs.keys())
+        values = list(probs.values())
+        colors = ["#64FFDA" if v == max(values) else "#536DFE" for v in values]
+
+        fig = go.Figure(go.Bar(
+            x=values, y=classes, orientation="h",
+            marker=dict(color=colors, line=dict(color="#64FFDA", width=1)),
+            text=[f"{v:.1f}%" for v in values],
+            textposition="outside",
+            textfont=dict(color="#CCD6F6"),
+        ))
+        fig.update_layout(
+            xaxis=dict(range=[0, 105], title="Probability (%)", **PLOTLY_LAYOUT["xaxis"]),
+            **{k: v for k, v in PLOTLY_LAYOUT.items() if k != "xaxis"},
+            height=250, showlegend=False,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -464,10 +695,9 @@ elif page == "⚡ Arc Intelligence":
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "🗺️ Route Map":
     st.markdown("# 🗺️ Delhi-Agra Corridor Route Map")
+    st.markdown('<div class="gradient-line"></div>', unsafe_allow_html=True)
     st.markdown("Interactive map showing defect events with **colour-coded severity markers**.")
-    st.markdown("---")
 
-    # Generate demo events
     track_events, ohe_events = generate_demo_events()
     lhs = compute_lhs(track_events, ohe_events)
 
@@ -493,30 +723,17 @@ elif page == "🗺️ Route Map":
         tiles="CartoDB dark_matter",
     )
 
-    # Severity color mapping
-    severity_colors = {
-        "CRITICAL": "#FF5370",
-        "WARNING": "#FFCB6B",
-        "OK": "#C3E88D",
-    }
+    severity_colors = {"CRITICAL": "#FF5370", "WARNING": "#FFCB6B", "OK": "#C3E88D"}
 
-    # Draw railway corridor line
     corridor_coords = [
-        [28.6, 77.2],   # Delhi
-        [28.3, 77.3],
-        [27.9, 77.5],
-        [27.5, 77.7],
-        [27.2, 78.0],   # Agra
+        [28.6, 77.2], [28.3, 77.3], [27.9, 77.5],
+        [27.5, 77.7], [27.2, 78.0],
     ]
     folium.PolyLine(
-        corridor_coords,
-        color="#64FFDA",
-        weight=3,
-        opacity=0.6,
-        dash_array="10",
+        corridor_coords, color="#64FFDA",
+        weight=3, opacity=0.6, dash_array="10",
     ).add_to(m)
 
-    # Track events: CircleMarker
     for event in track_events:
         color = severity_colors.get(event.severity, "#C3E88D")
         popup_html = f"""
@@ -532,15 +749,11 @@ elif page == "🗺️ Route Map":
         folium.CircleMarker(
             location=[event.lat, event.lon],
             radius=max(6, event.risk_index / 8),
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.7,
+            color=color, fill=True, fill_color=color, fill_opacity=0.7,
             popup=folium.Popup(popup_html, max_width=300),
             tooltip=f"Track: {event.defect_class} (Risk: {event.risk_index:.0f})",
         ).add_to(m)
 
-    # OHE events: RegularPolygonMarker
     for event in ohe_events:
         color = severity_colors.get(event.severity, "#C3E88D")
         popup_html = f"""
@@ -555,26 +768,22 @@ elif page == "🗺️ Route Map":
         """
         folium.RegularPolygonMarker(
             location=[event.lat, event.lon],
-            number_of_sides=4,
-            radius=max(8, event.risk_index / 6),
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.7,
+            number_of_sides=4, radius=max(8, event.risk_index / 6),
+            color=color, fill=True, fill_color=color, fill_opacity=0.7,
             popup=folium.Popup(popup_html, max_width=300),
             tooltip=f"OHE: {event.defect_class} (Risk: {event.risk_index:.0f})",
         ).add_to(m)
 
-    # Add legend
     legend_html = """
     <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
-                background: rgba(10,22,40,0.9); padding: 15px 20px; border-radius: 10px;
-                border: 1px solid #1d3461; font-family: Inter, sans-serif;">
+                background: rgba(10,22,40,0.92); padding: 16px 22px; border-radius: 12px;
+                border: 1px solid rgba(100,255,218,0.15); font-family: Inter, sans-serif;
+                backdrop-filter: blur(10px);">
         <h4 style="color: #CCD6F6; margin: 0 0 10px 0; font-size: 13px;">Legend</h4>
         <p style="margin: 4px 0; color: #CCD6F6; font-size: 11px;">
-            <span style="color:#FF5370;">●</span> CRITICAL &nbsp;
-            <span style="color:#FFCB6B;">●</span> WARNING &nbsp;
-            <span style="color:#C3E88D;">●</span> OK
+            <span style="color:#FF5370;">&#9679;</span> CRITICAL &nbsp;
+            <span style="color:#FFCB6B;">&#9679;</span> WARNING &nbsp;
+            <span style="color:#C3E88D;">&#9679;</span> OK
         </p>
         <p style="margin: 4px 0; color: #8892B0; font-size: 10px;">
             ● Circle = Track &nbsp; ◆ Diamond = OHE
@@ -591,14 +800,17 @@ elif page == "🗺️ Route Map":
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "📄 Report":
     st.markdown("# 📄 Maintenance Report")
+    st.markdown('<div class="gradient-line"></div>', unsafe_allow_html=True)
     st.markdown("Generate and download a comprehensive **PDF maintenance report** with ranked defect events.")
-    st.markdown("---")
 
     track_events, ohe_events = generate_demo_events()
     lhs = compute_lhs(track_events, ohe_events)
 
-    # Preview
-    st.markdown("### 📊 Report Preview")
+    # LHS Gauge
+    st.plotly_chart(make_gauge(
+        lhs["composite_lhs"], "Composite LHS Score",
+        color_ranges=[[0, 30, "#C3E88D"], [30, 50, "#FFCB6B"], [50, 70, "#FF8A80"], [70, 100, "#FF5370"]],
+    ), use_container_width=True)
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -612,7 +824,6 @@ elif page == "📄 Report":
 
     st.markdown("---")
 
-    # Event summary table
     all_events = list(track_events) + list(ohe_events)
     all_events.sort(key=lambda e: e.risk_index, reverse=True)
 
@@ -627,27 +838,22 @@ elif page == "📄 Report":
             "Location": f"({e.lat:.3f}, {e.lon:.3f})",
         })
 
-    st.dataframe(
-        pd.DataFrame(events_data),
-        use_container_width=True,
-        hide_index=True,
-    )
+    st.dataframe(pd.DataFrame(events_data), use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
-    # Generate and download PDF
-    if st.button("🔄 Generate PDF Report", use_container_width=True):
+    if st.button("Generate PDF Report", use_container_width=True):
         with st.spinner("Generating PDF report..."):
             pdf_bytes = generate_report(track_events, ohe_events, lhs)
 
         st.download_button(
-            label="📥 Download PDF Report",
+            label="Download PDF Report",
             data=pdf_bytes,
             file_name="railpulse_maintenance_report.pdf",
             mime="application/pdf",
             use_container_width=True,
         )
-        st.success("✅ Report generated successfully!")
+        st.success("Report generated successfully!")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -655,109 +861,122 @@ elif page == "📄 Report":
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "🚆 Train Network":
     st.markdown("# 🚆 Distributed Train Network")
+    st.markdown('<div class="gradient-line"></div>', unsafe_allow_html=True)
     st.markdown(
         "Every train is an independent sensor node. The **consensus engine** "
         "cross-validates detections across the fleet, confirming real defects "
         "and filtering false positives."
     )
-    st.markdown("---")
 
-    # Generate fleet events and consensus
     fleet = generate_fleet_events(n_trains=4)
     consensus = compute_consensus(fleet)
 
     confirmed = [e for e in consensus if e.status == "CONFIRMED"]
     unconfirmed = [e for e in consensus if e.status == "UNCONFIRMED"]
 
-    # ── Metric cards ───────────────────────────────────────────────────
-    col1, col2, col3 = st.columns(3)
+    # ── Fleet overview ─────────────────────────────────────────────────
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Trains", len(fleet))
+        st.metric("Fleet Size", len(fleet))
     with col2:
-        st.metric("Confirmed Defects", len(confirmed))
+        st.metric("Total Detections", len(consensus))
     with col3:
-        st.metric("Unconfirmed Defects", len(unconfirmed))
+        st.metric("Confirmed", len(confirmed))
+    with col4:
+        st.metric("Unconfirmed", len(unconfirmed))
 
     st.markdown("---")
 
-    # ── Folium Map ─────────────────────────────────────────────────────
-    center_lat = (28.6 + 27.2) / 2
-    center_lon = (77.2 + 78.0) / 2
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=8,
-        tiles="CartoDB dark_matter",
-    )
+    # ── Per-train breakdown ────────────────────────────────────────────
+    st.markdown("### 🚂 Fleet Breakdown")
+    train_cols = st.columns(len(fleet))
+    for i, train_data in enumerate(fleet):
+        with train_cols[i]:
+            n_events = len(train_data["track_events"]) + len(train_data["ohe_events"])
+            st.metric(f"Train {train_data['train_id']}", f"{n_events} events")
 
-    severity_colors = {
-        "CRITICAL": "#FF5370",
-        "WARNING": "#FFCB6B",
-        "OK": "#C3E88D",
-    }
+    st.markdown("---")
 
-    # Draw corridor line
-    corridor_coords = [
-        [28.6, 77.2], [28.3, 77.3], [27.9, 77.5],
-        [27.5, 77.7], [27.2, 78.0],
-    ]
-    folium.PolyLine(
-        corridor_coords, color="#64FFDA",
-        weight=3, opacity=0.6, dash_array="10",
-    ).add_to(m)
+    # ── Consensus donut ────────────────────────────────────────────────
+    col_chart, col_map = st.columns([1, 2])
 
-    # Plot consensus events
-    for event in consensus:
-        color = severity_colors.get(event.severity, "#C3E88D")
-        is_confirmed = event.status == "CONFIRMED"
-        fill_opacity = 0.9 if is_confirmed else 0.3
-        weight = 2 if is_confirmed else 1
+    with col_chart:
+        st.markdown("### Status Distribution")
+        fig = go.Figure(go.Pie(
+            labels=["CONFIRMED", "UNCONFIRMED"],
+            values=[len(confirmed), len(unconfirmed)],
+            hole=0.65,
+            marker=dict(colors=["#64FFDA", "rgba(100,255,218,0.2)"],
+                        line=dict(color="#0a1628", width=3)),
+            textfont=dict(color="#CCD6F6", size=13),
+            textinfo="label+value",
+        ))
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter", color="#8892B0"),
+            showlegend=False,
+            height=350,
+            margin=dict(l=20, r=20, t=20, b=20),
+            annotations=[dict(
+                text=f"<b>{len(consensus)}</b><br>Total",
+                x=0.5, y=0.5, font=dict(size=20, color="#CCD6F6"), showarrow=False,
+            )],
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        status_icon = "CONFIRMED" if is_confirmed else "UNCONFIRMED"
-        popup_html = f"""
-        <div style="font-family: Inter, sans-serif; min-width: 220px;">
-            <h4 style="color: #1a1a2e; margin-bottom: 5px;">
-                {'🟢' if is_confirmed else '🔘'} {status_icon}
-            </h4>
-            <b>Defect:</b> {event.defect_class}<br>
-            <b>Type:</b> {event.asset_type.upper()}<br>
-            <b>Risk:</b> {event.risk_index:.1f}<br>
-            <b>Confidence:</b> {event.confidence:.1f}%<br>
-            <b>Severity:</b> <span style="color:{color}; font-weight:bold;">{event.severity}</span><br>
-            <b>Trains:</b> {event.confirming_trains}
-        </div>
-        """
+    with col_map:
+        st.markdown("### Network Map")
+        center_lat = (28.6 + 27.2) / 2
+        center_lon = (77.2 + 78.0) / 2
+        m = folium.Map(location=[center_lat, center_lon], zoom_start=8, tiles="CartoDB dark_matter")
 
-        folium.CircleMarker(
-            location=[event.lat, event.lon],
-            radius=max(7, event.risk_index / 7),
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=fill_opacity,
-            weight=weight,
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=f"{event.status}: {event.defect_class} (Risk: {event.risk_index:.0f}, Trains: {event.confirming_trains})",
+        severity_colors = {"CRITICAL": "#FF5370", "WARNING": "#FFCB6B", "OK": "#C3E88D"}
+
+        folium.PolyLine(
+            [[28.6, 77.2], [28.3, 77.3], [27.9, 77.5], [27.5, 77.7], [27.2, 78.0]],
+            color="#64FFDA", weight=3, opacity=0.6, dash_array="10",
         ).add_to(m)
 
-    # Legend
-    legend_html = """
-    <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
-                background: rgba(10,22,40,0.9); padding: 15px 20px; border-radius: 10px;
-                border: 1px solid #1d3461; font-family: Inter, sans-serif;">
-        <h4 style="color: #CCD6F6; margin: 0 0 10px 0; font-size: 13px;">Train Network Legend</h4>
-        <p style="margin: 4px 0; color: #CCD6F6; font-size: 11px;">
-            <span style="color:#FF5370;">&#9679;</span> CRITICAL &nbsp;
-            <span style="color:#FFCB6B;">&#9679;</span> WARNING &nbsp;
-            <span style="color:#C3E88D;">&#9679;</span> OK
-        </p>
-        <p style="margin: 4px 0; color: #8892B0; font-size: 10px;">
-            Solid = CONFIRMED &nbsp; Faded = UNCONFIRMED
-        </p>
-    </div>
-    """
-    m.get_root().html.add_child(folium.Element(legend_html))
+        for event in consensus:
+            color = severity_colors.get(event.severity, "#C3E88D")
+            is_confirmed = event.status == "CONFIRMED"
+            fill_opacity = 0.9 if is_confirmed else 0.25
 
-    st_folium(m, width=None, height=600)
+            popup_html = f"""
+            <div style="font-family: Inter, sans-serif; min-width: 200px;">
+                <h4 style="color: #1a1a2e;">{event.status}</h4>
+                <b>Defect:</b> {event.defect_class}<br>
+                <b>Risk:</b> {event.risk_index:.1f}<br>
+                <b>Trains:</b> {event.confirming_trains}<br>
+                <b>Severity:</b> <span style="color:{color}; font-weight:bold;">{event.severity}</span>
+            </div>
+            """
+            folium.CircleMarker(
+                location=[event.lat, event.lon],
+                radius=max(7, event.risk_index / 7),
+                color=color, fill=True, fill_color=color,
+                fill_opacity=fill_opacity, weight=2 if is_confirmed else 1,
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=f"{event.status}: {event.defect_class} (Trains: {event.confirming_trains})",
+            ).add_to(m)
+
+        legend_html = """
+        <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
+                    background: rgba(10,22,40,0.92); padding: 14px 18px; border-radius: 10px;
+                    border: 1px solid rgba(100,255,218,0.15); font-family: Inter, sans-serif;">
+            <p style="margin: 3px 0; color: #CCD6F6; font-size: 10px;">
+                <span style="color:#FF5370;">&#9679;</span> CRITICAL &nbsp;
+                <span style="color:#FFCB6B;">&#9679;</span> WARNING &nbsp;
+                <span style="color:#C3E88D;">&#9679;</span> OK
+            </p>
+            <p style="margin: 3px 0; color: #8892B0; font-size: 9px;">
+                Solid = CONFIRMED &nbsp; Faded = UNCONFIRMED
+            </p>
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(legend_html))
+        st_folium(m, width=None, height=400)
 
     # ── Consensus Table ────────────────────────────────────────────────
     st.markdown("---")
@@ -770,14 +989,10 @@ elif page == "🚆 Train Network":
             "Defect": e.defect_class,
             "Type": e.asset_type.upper(),
             "Status": e.status,
-            "Confirming Trains": e.confirming_trains,
+            "Trains": e.confirming_trains,
             "Risk": e.risk_index,
             "Confidence (%)": e.confidence,
             "Severity": e.severity,
         })
 
-    st.dataframe(
-        pd.DataFrame(table_data),
-        use_container_width=True,
-        hide_index=True,
-    )
+    st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
