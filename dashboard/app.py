@@ -14,15 +14,10 @@ if REPO_ROOT not in sys.path:
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from scipy.signal import stft
 import plotly.graph_objects as go
-import plotly.express as px
 import folium
 from streamlit_folium import st_folium
-import io
 
 from track_module.predict import load_models, predict_track
 from arc_module.predict_arc import load_arc_model, predict_arc
